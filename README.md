@@ -2,6 +2,10 @@
 
 Nailgun is a self-hosted outbound mail gateway. It accepts authenticated REST, Mailgun-compatible form submissions and MCP requests, and keeps a durable MariaDB queue for delivery through a TLS SMTP relay.
 
+![Nailgun API reference showing the structured and raw mail endpoints](docs/images/api-reference.png)
+
+The screenshot shows the gateway’s generated API reference at `/mail/docs` in a local demo. See how Nailgun fits into the [self-hosted stack](https://obscuretone.com/posts/en/self_hosted_tools).
+
 An accepted request returns HTTP 202 and a queue ID. Reuse an idempotency key to retry the same logical submission. Reusing the key with a different payload returns HTTP 409. The authenticated status API returns metadata and omits message bodies. Use the raw MIME endpoint for attachments. A complete MIME message can be up to 5 MiB before base64 encoding.
 
 ## Run the gateway
