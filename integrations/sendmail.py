@@ -3,6 +3,7 @@
 
 import base64
 import json
+import os
 import socket
 import struct
 import sys
@@ -95,7 +96,7 @@ def submit(data, path=SOCKET):
 def main():
     try:
         data = request(sys.stdin.buffer.read(MAX_BYTES + 1), sys.argv[1:])
-        result = submit(data)
+        result = submit(data, os.environ.get("NAILGUN_SENDMAIL_SOCKET", SOCKET))
         if not result.get("ok"):
             print("vps-sendmail: " + result.get("error", "Submission failed"), file=sys.stderr)
             return 75 if result.get("status_code", 503) in (429, 503) else 65

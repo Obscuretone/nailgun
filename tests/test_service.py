@@ -134,9 +134,10 @@ def test_mailgun_subset(client):
             "text": "Test",
         },
     )
-    assert r.status_code == 202, r.text
+    assert r.status_code == 200, r.text
     assert r.json()["message"] == "Queued. Thank you."
-    assert client.post("/v3/example.com/messages", data={"o:tracking": "yes"}).status_code == 422
+    assert set(r.json()) == {"id", "message"}
+    assert client.post("/v3/example.com/messages", data={"o:tracking": "yes"}).status_code == 400
     assert (
         client.post(
             "/v3/other.example/messages",
@@ -147,7 +148,7 @@ def test_mailgun_subset(client):
                 "text": "Test",
             },
         ).status_code
-        == 422
+        == 400
     )
 
 

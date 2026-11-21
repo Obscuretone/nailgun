@@ -8,6 +8,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
     api_key: SecretStr = Field(min_length=32)
+    mailgun_send_keys_file: Path | None = None
     state_directory: Path = Path("data")
     mariadb_database: str
     mariadb_user: str

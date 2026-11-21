@@ -15,11 +15,23 @@ An accepted request returns HTTP 202 and a queue ID. Reuse an idempotency key to
 3. Copy `.env.example` to a private configuration file. Set a randomly generated API key, the public hostname and your SMTP relay settings. The API key permits sending, viewing and canceling messages, and configuring sender domains.
 4. Run `uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8893` behind a TLS proxy. Example systemd units and an Nginx location snippet are in `deploy/`. Adjust paths and identities to your installation. Enable only verified sender domains.
 
-Use `POST /v1/messages` for structured mail and `POST /v1/messages/raw` for MIME. Authenticate with `Authorization: Bearer <key>`. MCP is served at `/mcp/`. The Mailgun-compatible `/v3/<domain>/messages` endpoint also accepts Basic authentication with username `api` and the gateway key as the password.
+Use `POST /v1/messages` for structured mail and `POST /v1/messages/raw` for MIME. Authenticate with `Authorization: Bearer <key>`. MCP is served at `/mcp/`. For Mailgun clients, use the Nailgun origin with `POST /v3/<domain>/messages`
+or `POST /v3/<domain>/messages.mime`. Use HTTP Basic authentication with
+username `api` and the gateway key as password. Successful submissions return HTTP
+200 with the Mailgun `id` and `message` fields. For a send-only client, set
+`MAILGUN_SEND_KEYS_FILE` to a private JSON file mapping each domain to a
+list of independent random keys. Those keys are scoped to the two POST
+submission routes on their configured domain.
+
+Structured sending supports text, HTML, repeated recipients, reply-to,
+attachments and inline attachments. MIME sending accepts a multipart
+`message` file and repeated `to` elements. Use a configured sender domain.
+Options outside this outbound subset are rejected explicitly. Use the native
+`/v1` API to retrieve queue status by queue ID.
 
 ## Local submissions and WordPress
 
-On Linux, the local broker uses Unix socket peer credentials to verify the operating-system account. Configure the allowed users and sender domains in the broker configuration. Install `integrations/sendmail.py` as `/usr/local/sbin/vps-sendmail` and grant submission socket access only to authorized accounts. The `--check` option validates a submission without queuing it.
+On Linux, the local broker uses Unix socket peer credentials to verify the operating-system account. Configure the allowed users and sender domains in the broker configuration. Install `integrations/sendmail.py` as `/usr/local/sbin/vps-sendmail` and grant submission socket access only to authorized accounts. Set `NAILGUN_SENDMAIL_SOCKET` if the broker listens at a custom path. The `--check` option validates a submission without queuing it.
 
 The [VPS Mail Gateway plugin](wordpress/vps-mail-gateway) supports WordPress 6.8 or newer. Local mode uses the submission handler. API mode sends to the configured HTTPS endpoint and binds the API key to that endpoint. WordPress receives success once the queue accepts the message. SMTP delivery happens asynchronously.
 

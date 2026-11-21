@@ -3,36 +3,37 @@ import base64
 import fcntl
 import secrets
 from contextlib import asynccontextmanager
-from email.utils import getaddresses
 from typing import Annotated, Any
 
-from fastapi import FastAPI, Header, Query, Request
+from fastapi import FastAPI, Header, Query
 from fastapi.responses import JSONResponse
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
-from pydantic import ValidationError
 from pymysql import MySQLError
 
 from app.config import Settings
 from app.delivery import worker
+from app.mailgun import load_send_keys, permits_send, register_mailgun
 from app.models import DomainUpdate, Message, RawMessage
 from app.store import ServiceError, Store
 
 
 class AuthAndLimits:
-    def __init__(self, app, key):
+    def __init__(self, app, key, mailgun_send_keys):
         self.app = app
         self.key = key
+        self.mailgun_send_keys = mailgun_send_keys
 
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http":
             return await self.app(scope, receive, send)
         headers = dict(scope["headers"])
         response = None
+        mailgun = scope["path"].startswith("/v3/")
         if scope["path"] != "/healthz":
             raw = headers.get(b"authorization", b"").decode("latin1")
             candidate = raw[7:] if raw.lower().startswith("bearer ") else ""
-            if raw.lower().startswith("basic ") and scope["path"].startswith("/v3/"):
+            if raw.lower().startswith("basic ") and mailgun:
                 try:
                     username, password = (
                         base64.b64decode(raw[6:], validate=True).decode().split(":", 1)
@@ -40,12 +41,14 @@ class AuthAndLimits:
                     candidate = password if username == "api" else ""
                 except (ValueError, UnicodeError):
                     pass
-            if not secrets.compare_digest(candidate.encode(), self.key.encode()):
+            if not (secrets.compare_digest(candidate.encode(), self.key.encode())
+                    or permits_send(self.mailgun_send_keys, scope, raw, candidate)):
                 response = JSONResponse(
-                    {"detail": "Unauthorized"}, 401, headers={"WWW-Authenticate": "Bearer"}
+                    {"message": "Forbidden"} if mailgun else {"detail": "Unauthorized"}, 401,
+                    headers={"WWW-Authenticate": 'Basic realm="Mailgun"' if mailgun else "Bearer"},
                 )
         # Raw MIME submissions may contain attachments; other endpoints remain bounded.
-        body_limit = 8 * 1024 * 1024 if scope["path"] == "/v1/messages/raw" else 524288
+        body_limit = 8 * 1024 * 1024 if mailgun or scope["path"] == "/v1/messages/raw" else 524288
         body = bytearray()
         if not response:
             while True:
@@ -153,10 +156,15 @@ def create_app(settings=None):
         redoc_url=None,
     )
     app.state.store = store
-    app.add_middleware(AuthAndLimits, key=settings.api_key.get_secret_value())
+    app.add_middleware(
+        AuthAndLimits, key=settings.api_key.get_secret_value(),
+        mailgun_send_keys=load_send_keys(settings.mailgun_send_keys_file),
+    )
 
     @app.exception_handler(ServiceError)
     async def service_error(request, exc):
+        if request.url.path.startswith("/v3/"):
+            return JSONResponse({"message": exc.detail}, exc.status)
         return JSONResponse({"detail": exc.detail}, exc.status)
 
     @app.get("/healthz")
@@ -201,35 +209,7 @@ def create_app(settings=None):
     def update_domain(name: str, update: DomainUpdate):
         return store.update_domain(name, update)
 
-    @app.post("/v3/{domain}/messages", status_code=202)
-    async def mailgun(domain: str, request: Request):
-        """Mailgun basic text/html form subset. Unsupported fields are rejected."""
-        form = await request.form(max_files=0, max_fields=20, max_part_size=400_000)
-        supported = {"from", "to", "cc", "bcc", "subject", "text", "html", "h:Reply-To"}
-        if set(form) - supported:
-            raise ServiceError(
-                422, "Unsupported Mailgun fields: " + ", ".join(sorted(set(form) - supported))
-            )
-        values = {k: form[k] for k in ("from", "subject", "text", "html") if k in form}
-        for k in ("to", "cc", "bcc"):
-            values[k] = [
-                f"{name} <{address}>" if name else address
-                for name, address in getaddresses(form.getlist(k))
-            ]
-        if "h:Reply-To" in form:
-            values["reply_to"] = form["h:Reply-To"]
-        try:
-            message = Message.model_validate(values)
-        except ValidationError:
-            raise ServiceError(422, "Invalid sender, recipients, subject or body") from None
-        if message.domain != domain.lower():
-            raise ServiceError(422, "Sender domain must match the URL domain")
-        result = store.enqueue(message, request.headers.get("Idempotency-Key"))
-        return {
-            "id": result["message_id"],
-            "message": "Queued. Thank you.",
-            "queue_id": result["id"],
-        }
+    register_mailgun(app, store)
 
     app.mount("/mcp", mcp.streamable_http_app())
     return app
