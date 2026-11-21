@@ -1,0 +1,34 @@
+[Unit]
+Description=VPS Mail REST API, MCP and Google SMTP worker
+After=network-online.target mariadb.service
+Requires=mariadb.service
+Wants=network-online.target
+
+[Service]
+User=vps-mail
+Group=site-smtp
+WorkingDirectory=/opt/vps-mail/current
+EnvironmentFile=/etc/vps-mail.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/vps-mail/venv/bin/uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8893 --workers 1 --no-access-log
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=180
+StateDirectory=vps-mail
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+MemoryHigh=140M
+MemoryMax=190M
+TasksMax=32
+
+[Install]
+WantedBy=multi-user.target

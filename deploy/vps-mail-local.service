@@ -1,0 +1,31 @@
+[Unit]
+Description=Local sendmail submissions into the VPS Mail durable queue
+After=vps-mail.service
+Requires=vps-mail.service
+PartOf=vps-mail.service
+
+[Service]
+User=vps-mail
+Group=vps-mail-submit
+WorkingDirectory=/opt/vps-mail/current
+EnvironmentFile=/etc/vps-mail.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/vps-mail/venv/bin/python -m app.local_broker
+RuntimeDirectory=vps-mail-local
+RuntimeDirectoryMode=0750
+UMask=0077
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/var/lib/vps-mail
+RestrictAddressFamilies=AF_UNIX
+CapabilityBoundingSet=
+MemoryMax=160M
+TasksMax=16
+LimitNOFILE=128
+
+[Install]
+WantedBy=multi-user.target

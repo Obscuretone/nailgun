@@ -1,0 +1,33 @@
+[project]
+name = "vps-mail"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "email-validator>=2.2,<3",
+    "fastapi>=0.115,<1",
+    "mcp>=1.26,<2",
+    "pydantic-settings>=2.7,<3",
+    "pymysql>=1.1.1,<2",
+    "python-multipart>=0.0.22,<1",
+    "uvicorn>=0.30,<1",
+]
+
+[dependency-groups]
+dev = [
+    "aiosmtpd>=1.4.6,<2",
+    "httpx>=0.28,<1",
+    "pytest>=8,<10",
+    "pytest-asyncio>=0.25,<2",
+    "ruff>=0.14,<1",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]

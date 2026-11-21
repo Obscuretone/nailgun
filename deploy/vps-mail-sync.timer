@@ -1,0 +1,11 @@
+[Unit]
+Description=Check for new or removed mail sender domains every day
+
+[Timer]
+OnBootSec=5m
+OnCalendar=daily
+RandomizedDelaySec=15m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

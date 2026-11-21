@@ -1,0 +1,15 @@
+[Unit]
+Description=Reconcile nginx domains into the VPS Mail sender inventory
+After=nginx.service mariadb.service
+Requires=mariadb.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/vps-mail/current
+EnvironmentFile=/etc/vps-mail.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/bin/bash -o pipefail -c '/usr/sbin/nginx -T 2>/dev/null | /usr/sbin/runuser -u vps-mail -g site-smtp -- /opt/vps-mail/venv/bin/python -m app.sync_domains --stdin'
+UMask=0077
+PrivateTmp=yes
+ProtectHome=yes
+# nginx -T opens its configured log files while checking configuration.
